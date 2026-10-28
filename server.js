@@ -18,7 +18,7 @@ const app = express();
 app.use(express.json({ limit: '50mb' }));
 app.use(cookieParser());
 app.use(cors({
-    origin: ['http://localhost:5500' 'https://diverseapp.vercel.app/'], // Add your Vercel URL here later
+    origin: ['http://localhost:5500', '[https://diverseapp.vercel.app](https://diverseapp.vercel.app)'], // Add your Vercel URL here later
     credentials: true,
     methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS']
 }));
