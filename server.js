@@ -18,7 +18,7 @@ const app = express();
 app.use(express.json({ limit: '50mb' }));
 app.use(cookieParser());
 app.use(cors({
-    origin: ['http://localhost:5500', '[https://diverseapp.vercel.app](https://diverseapp.vercel.app)'], // Add your Vercel URL here later
+    origin: ['http://localhost:5500', 'https://diverseapp.vercel.app'], // Add your Vercel URL here later
     credentials: true,
     methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS']
 }));
@@ -78,7 +78,8 @@ app.post('/api/login', async (req, res) => {
 
         res.cookie('dv_session', token, { 
             httpOnly: true, 
-            sameSite: 'lax', // Use 'none' and secure: true when deploying to production with HTTPS
+            sameSite: 'none',
+            secure: true, // Use 'none' and secure: true when deploying to production with HTTPS
             maxAge: 8 * 60 * 60 * 1000 
         });
 
