@@ -12,6 +12,14 @@ const Friendship = require('./models/Friendship');
 const Document = require('./models/Document');
 const Listing = require('./models/Listing');
 const GameRoom = require('./models/GameRoom');
+const locationSchema = new mongoose.Schema({
+    userId: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true, unique: true },
+    latitude: { type: Number, required: true },
+    longitude: { type: Number, required: true },
+    accuracyMeters: { type: Number, default: 0 }
+}, { timestamps: true });
+const Location = mongoose.model('Location', locationSchema);
+
 const app = express();
 
 // Middleware
@@ -180,6 +188,19 @@ app.delete('/api/profile/picture', requireAuth, async (req, res) => {
     res.status(200).json({ removed: true });
 });
 
+app.get('/api/profile/picture', requireAuth, async (req, res) => {
+    try {
+        let user = req.user;
+        if (req.query.userId) {
+            user = await User.findById(req.query.userId);
+        }
+        if (!user || !user.pictureUrl) return res.status(404).json({ error: "Picture not found." });
+        res.redirect(user.pictureUrl); // Redirects the browser straight to Cloudinary
+    } catch (err) {
+        res.status(500).json({ error: "Could not fetch picture." });
+    }
+});
+
 // --- POST ROUTES ---
 app.post('/api/posts', requireAuth, async (req, res) => {
     try {
@@ -229,6 +250,16 @@ app.get('/api/posts', requireAuth, async (req, res) => {
     } catch (err) {
         console.error("Posts Fetch Error:", err); // Will show the exact error in your VS Code terminal
         res.status(500).json({ error: "Could not fetch posts." });
+    }
+});
+
+app.get('/api/posts/:id/media', requireAuth, async (req, res) => {
+    try {
+        const post = await Post.findById(req.params.id);
+        if (!post || !post.mediaUrl) return res.status(404).json({ error: "Media not found." });
+        res.redirect(post.mediaUrl);
+    } catch (err) {
+        res.status(500).json({ error: "Could not fetch media." });
     }
 });
 
@@ -632,6 +663,56 @@ app.post('/api/games/result', requireAuth, async (req, res) => {
         res.status(500).json({ error: "Could not submit result." });
     }
 });
+
+// --- LOCATION ROUTES ---
+app.post('/api/location', requireAuth, async (req, res) => {
+    try {
+        const { latitude, longitude, accuracyMeters } = req.body;
+        await Location.findOneAndUpdate(
+            { userId: req.user._id },
+            { latitude, longitude, accuracyMeters },
+            { upsert: true, new: true }
+        );
+        res.status(200).json({ shared: true });
+    } catch (err) {
+        res.status(500).json({ error: "Could not share location." });
+    }
+});
+
+app.delete('/api/location', requireAuth, async (req, res) => {
+    await Location.findOneAndDelete({ userId: req.user._id });
+    res.status(200).json({ sharing: false });
+});
+
+app.get('/api/friends/locations', requireAuth, async (req, res) => {
+    try {
+        // Fetch accepted friends
+        const friendships = await Friendship.find({
+            $or: [{ requesterId: req.user._id }, { addresseeId: req.user._id }],
+            status: 'accepted'
+        });
+        const friendIds = friendships.map(f => f.requesterId.equals(req.user._id) ? f.addresseeId : f.requesterId);
+        
+        // Find locations updated in the last 10 minutes
+        const tenMinsAgo = new Date(Date.now() - 10 * 60 * 1000);
+        const locations = await Location.find({
+            userId: { $in: friendIds },
+            updatedAt: { $gte: tenMinsAgo }
+        }).populate('userId', 'name');
+
+        res.status(200).json({ locations: locations.map(l => ({
+            id: l.userId._id,
+            name: l.userId.name,
+            latitude: l.latitude,
+            longitude: l.longitude,
+            accuracyMeters: l.accuracyMeters,
+            updatedAt: l.updatedAt
+        }))});
+    } catch (err) {
+        res.status(500).json({ error: "Could not fetch locations." });
+    }
+});
+
 
 const PORT = process.env.PORT || 8765;
 app.listen(PORT, () => console.log(`DI-VERSE Express API running on port ${PORT}`));
