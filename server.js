@@ -713,6 +713,16 @@ app.get('/api/friends/locations', requireAuth, async (req, res) => {
     }
 });
 
+// --- MOVIE ROUTES ---
+app.get('/api/movies', requireAuth, async (req, res) => {
+    // Returns an empty library so the page loads successfully without a 404 error
+    res.status(200).json({ movies: [] }); 
+});
+
+app.post('/api/movies', requireAuth, async (req, res) => {
+    // Prevents massive video uploads from crashing the free Render server
+    res.status(400).json({ error: "Movie uploads are currently disabled." });
+});
 
 const PORT = process.env.PORT || 8765;
 app.listen(PORT, () => console.log(`DI-VERSE Express API running on port ${PORT}`));
