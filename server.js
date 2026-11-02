@@ -882,6 +882,54 @@ app.get('/api/admin/users', requireAuth, async (req, res) => {
     res.status(200).json({ users });
 });
 
+// Define your allowed admin emails here
+const allowedAdmins = [
+    'trendycreatives112@gmail.com', 
+    'your-friends-email@gmail.com' // <-- Add your friend's email here
+];
+
+app.post('/api/admin/login', async (req, res) => {
+    try {
+        const { email, password } = req.body;
+        
+        // Check if the email is in the allowed admins list
+        if (!allowedAdmins.includes(email.toLowerCase())) {
+            return res.status(403).json({ error: "Unauthorized admin email." });
+        }
+
+        const user = await User.findOne({ email: email.toLowerCase() });
+        if (!user || !(await bcrypt.compare(password, user.passwordHash))) {
+            return res.status(401).json({ error: "Email or password is incorrect." });
+        }
+
+        const token = jwt.sign(
+            { userId: user._id, role: 'admin', email: user.email }, 
+            process.env.JWT_SECRET, 
+            { expiresIn: '8h' }
+        );
+
+        res.cookie('dv_session', token, { 
+            httpOnly: true, 
+            sameSite: 'none',
+            secure: true, 
+            maxAge: 8 * 60 * 60 * 1000 
+        });
+
+        res.status(200).json({ signedIn: true });
+    } catch (error) {
+        res.status(500).json({ error: "Could not sign in admin." });
+    }
+});
+
+app.get('/api/admin/users', requireAuth, async (req, res) => {
+    // Basic protection to prevent unauthorized access
+    if (!allowedAdmins.includes(req.user.email)) {
+        return res.status(403).json({ error: "Unauthorized" });
+    }
+    const users = await User.find().select('name email isBanned createdAt');
+    res.status(200).json({ users });
+});
+
 // --- MOVIE ROUTES ---
 app.get('/api/movies', requireAuth, async (req, res) => {
     // Returns an empty library so the page loads successfully without a 404 error
