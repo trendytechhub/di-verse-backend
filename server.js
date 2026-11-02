@@ -436,6 +436,88 @@ app.post('/api/chat', requireAuth, async (req, res) => {
     }
 });
 
+// Search users by name or email
+app.get('/api/users/search', requireAuth, async (req, res) => {
+    try {
+        const query = req.query.q || req.query.search || req.query.name;
+        if (!query) return res.status(200).json({ users: [] });
+
+        const users = await User.find({
+            $or: [
+                { name: { $regex: query, $options: 'i' } },
+                { email: { $regex: query, $options: 'i' } }
+            ],
+            _id: { $ne: req.user._id } // Don't show the logged-in user in search results
+        }).select('name email pictureUrl').limit(20);
+
+        res.status(200).json({ users: users.map(u => ({
+            id: u._id,
+            name: u.name,
+            email: u.email,
+            pictureUrl: u.pictureUrl
+        }))});
+    } catch (err) {
+        res.status(500).json({ error: "Could not search users." });
+    }
+});
+
+// Send a friend request
+app.post('/api/friends/request', requireAuth, async (req, res) => {
+    try {
+        const { addresseeId } = req.body;
+        if (!addresseeId || addresseeId === req.user._id.toString()) {
+            return res.status(400).json({ error: "Invalid user." });
+        }
+
+        const existing = await Friendship.findOne({
+            $or: [
+                { requesterId: req.user._id, addresseeId },
+                { requesterId: addresseeId, addresseeId: req.user._id }
+            ]
+        });
+
+        if (existing) return res.status(400).json({ error: "Request already exists or you are already friends." });
+
+        await Friendship.create({ requesterId: req.user._id, addresseeId });
+        res.status(201).json({ requested: true });
+    } catch (err) {
+        res.status(500).json({ error: "Could not send request." });
+    }
+});
+
+// Accept a friend request
+app.post('/api/friends/accept', requireAuth, async (req, res) => {
+    try {
+        const { requesterId } = req.body;
+        const friendship = await Friendship.findOneAndUpdate(
+            { requesterId, addresseeId: req.user._id, status: 'pending' },
+            { status: 'accepted' },
+            { new: true }
+        );
+        
+        if (!friendship) return res.status(404).json({ error: "Request not found." });
+        res.status(200).json({ accepted: true });
+    } catch (err) {
+        res.status(500).json({ error: "Could not accept request." });
+    }
+});
+
+// Remove friend or reject request
+app.post('/api/friends/remove', requireAuth, async (req, res) => {
+    try {
+        const { friendId } = req.body;
+        await Friendship.findOneAndDelete({
+            $or: [
+                { requesterId: req.user._id, addresseeId: friendId },
+                { requesterId: friendId, addresseeId: req.user._id }
+            ]
+        });
+        res.status(200).json({ removed: true });
+    } catch (err) {
+        res.status(500).json({ error: "Could not remove friend." });
+    }
+});
+
 // --- PDF LIBRARY ROUTES ---
 app.post('/api/documents', requireAuth, async (req, res) => {
     try {
