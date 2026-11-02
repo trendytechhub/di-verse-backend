@@ -12,6 +12,15 @@ const Friendship = require('./models/Friendship');
 const Document = require('./models/Document');
 const Listing = require('./models/Listing');
 const GameRoom = require('./models/GameRoom');
+
+const cloudinary = require('cloudinary').v2;
+
+cloudinary.config({
+    cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
+    api_key: process.env.CLOUDINARY_API_KEY,
+    api_secret: process.env.CLOUDINARY_API_SECRET
+});
+
 const locationSchema = new mongoose.Schema({
     userId: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true, unique: true },
     latitude: { type: Number, required: true },
@@ -24,6 +33,7 @@ const app = express();
 
 // Middleware
 app.use(express.json({ limit: '50mb' }));
+app.use(express.urlencoded({ limit: '50mb', extended: true }));
 app.use(cookieParser());
 app.use(cors({
     origin: ['http://localhost:5500', 'https://diverseapp.vercel.app'], // Add your Vercel URL here later
@@ -124,6 +134,7 @@ app.get('/api/auth/me', async (req, res) => {
         res.status(401).json({ error: "Please sign in to access your homepage." });
     }
 });
+
 
 // --- AUTH MIDDLEWARE ---
 const requireAuth = async (req, res, next) => {
@@ -384,6 +395,44 @@ app.get('/api/friends/requests', requireAuth, async (req, res) => {
         res.status(200).json({ requests: formattedRequests });
     } catch (err) {
         res.status(500).json({ error: "Could not fetch requests." });
+    }
+});
+
+app.get('/api/chat/:friendId', requireAuth, async (req, res) => {
+    try {
+        const messages = await Message.find({
+            $or: [
+                { senderId: req.user._id, recipientId: req.params.friendId },
+                { senderId: req.params.friendId, recipientId: req.user._id }
+            ]
+        }).sort({ createdAt: 1 }).limit(50);
+
+        // Clear unread badge
+        await Message.updateMany(
+            { senderId: req.params.friendId, recipientId: req.user._id, isRead: false },
+            { isRead: true }
+        );
+
+        res.status(200).json({ messages: messages.map(m => ({
+            id: m._id,
+            content: m.content,
+            isMine: m.senderId.equals(req.user._id),
+            createdAt: m.createdAt
+        }))});
+    } catch (err) {
+        res.status(500).json({ error: "Could not fetch chat." });
+    }
+});
+
+app.post('/api/chat', requireAuth, async (req, res) => {
+    try {
+        const { recipientId, content } = req.body;
+        if (!content || !recipientId) return res.status(400).json({ error: "Invalid message." });
+
+        const msg = await Message.create({ senderId: req.user._id, recipientId, content });
+        res.status(201).json({ sent: true, message: { id: msg._id, content: msg.content, isMine: true, createdAt: msg.createdAt } });
+    } catch (err) {
+        res.status(500).json({ error: "Could not send message." });
     }
 });
 
@@ -711,6 +760,19 @@ app.get('/api/friends/locations', requireAuth, async (req, res) => {
     } catch (err) {
         res.status(500).json({ error: "Could not fetch locations." });
     }
+});
+
+// --- ADMIN & APPEAL ROUTES ---
+app.post('/api/appeal', async (req, res) => {
+    // Stub route to prevent appeal submission crashes
+    res.status(200).json({ submitted: true, message: "Appeal submitted successfully." });
+});
+
+app.get('/api/admin/users', requireAuth, async (req, res) => {
+    // Basic protection to prevent unauthorized access
+    if (req.user.email !== 'trendycreatives112@gmail.com') return res.status(403).json({ error: "Unauthorized" });
+    const users = await User.find().select('name email isBanned createdAt');
+    res.status(200).json({ users });
 });
 
 // --- MOVIE ROUTES ---
