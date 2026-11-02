@@ -485,6 +485,31 @@ app.post('/api/friends/request', requireAuth, async (req, res) => {
     }
 });
 
+// Load user suggestions (People you may know)
+app.get(['/api/users/suggestions', '/api/friends/suggestions', '/api/users'], requireAuth, async (req, res) => {
+    try {
+        const friendships = await Friendship.find({
+            $or: [{ requesterId: req.user._id }, { addresseeId: req.user._id }]
+        });
+        
+        const excludeIds = friendships.map(f => f.requesterId.equals(req.user._id) ? f.addresseeId : f.requesterId);
+        excludeIds.push(req.user._id);
+
+        const users = await User.find({ _id: { $nin: excludeIds } })
+            .select('name email pictureUrl')
+            .limit(10);
+
+        res.status(200).json({ users: users.map(u => ({
+            id: u._id,
+            name: u.name,
+            email: u.email,
+            pictureUrl: u.pictureUrl
+        }))});
+    } catch (err) {
+        res.status(500).json({ error: "Could not fetch suggestions." });
+    }
+});
+
 // Accept a friend request
 app.post('/api/friends/accept', requireAuth, async (req, res) => {
     try {
