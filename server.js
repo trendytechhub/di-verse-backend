@@ -930,6 +930,24 @@ app.get('/api/admin/users', requireAuth, async (req, res) => {
     res.status(200).json({ users });
 });
 
+app.get('/api/admin/reports', requireAuth, async (req, res) => {
+    // Check if the user is an allowed admin
+    if (!allowedAdmins.includes(req.user.email)) {
+        return res.status(403).json({ error: "Unauthorized" });
+    }
+    // Return an empty array to prevent frontend crashes
+    res.status(200).json({ reports: [] }); 
+});
+
+app.get('/api/admin/appeals', requireAuth, async (req, res) => {
+    // Check if the user is an allowed admin
+    if (!allowedAdmins.includes(req.user.email)) {
+        return res.status(403).json({ error: "Unauthorized" });
+    }
+    // Return an empty array to prevent frontend crashes
+    res.status(200).json({ appeals: [] }); 
+});
+
 // --- MOVIE ROUTES ---
 app.get('/api/movies', requireAuth, async (req, res) => {
     // Returns an empty library so the page loads successfully without a 404 error
